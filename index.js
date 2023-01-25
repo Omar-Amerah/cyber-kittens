@@ -104,6 +104,24 @@ app.get("/kittens/:id", async (req,res, next) => {
 
 // POST /kittens
 // TODO - takes req.body of {name, age, color} and creates a new cat with the given name, age, and color
+app.post("/kittens", async(req,res, next) =>{
+  try{
+    const data = req.body
+    const isMatch = await bcrypt.compare(req.body.password, userfound.password)
+    const userData = req.user
+    if(!userData)
+    {
+      res.sendStatus(401)
+    }
+    else{
+      
+    }
+  }catch(error){
+    console.log(error)
+    next(error)
+  }
+})
+
 
 // DELETE /kittens/:id
 // TODO - takes an id and deletes the cat with that id
