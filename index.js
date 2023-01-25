@@ -1,9 +1,35 @@
 const express = require('express');
+const jwt = require("jsonwebtoken");
 const app = express();
-const { User } = require('./db');
+require('dotenv').config(); 
+const { User, Kitten } = require('./db');
+const bcrypt = require('bcrypt');
 
+const SALT_COUNT =10
+
+console.log("secret", process.env.SIGNING_SECRET)
+
+const SIGNING_SECRET = process.env.SIGNING_SECRET;
+
+const setUser = (req, res, next) => {
+  try {
+    const auth = req.header('Authorization')
+    if(!auth){
+      next()
+      return
+    }
+    const [, token] = auth.split(" ")
+    const user = jwt.verify(token, SIGNING_SECRET)
+    req.user = user
+    next()
+    } catch (error) {
+      console.log(error)
+      next(error)
+    }
+}
 app.use(express.json());
 app.use(express.urlencoded({extended:true}));
+app.use(setUser)
 
 app.get('/', async (req, res, next) => {
   try {
@@ -19,17 +45,62 @@ app.get('/', async (req, res, next) => {
   }
 });
 
-// Verifies token with jwt.verify and sets req.user
-// TODO - Create authentication middleware
+app.post("/register", async(req,res, next) =>{
+  try{
+    const { username, password } = req.body;
+    const hashedpass = await bcrypt.hash(req.body.password, 10)
+    const {id} = await User.create({username, password: hashedpass});
+    const token = jwt.sign({id, username}, SIGNING_SECRET);
+    res.send({message: 'success', token})
+  }catch(error){
+    console.log(error)
+    next(error)
+  }
+})
 
-// POST /register
-// OPTIONAL - takes req.body of {username, password} and creates a new user with the hashed password
+app.post("/login", async(req,res, next) =>{
+  try{
+    const userfound = await User.findOne({where: {username: req.body.username}})
+    const isMatch = await bcrypt.compare(req.body.password, userfound.password)
+    if(!isMatch)
+    {
+      res.sendStatus(401)
+    }
+    else{
+      const token = jwt.sign(userfound.username, SIGNING_SECRET); 
+      res.send({token: token,message: "success"});
+    }
+  }catch(error){
+    console.log(error)
+    next(error)
+  }
+})
 
-// POST /login
-// OPTIONAL - takes req.body of {username, password}, finds user by username, and compares the password with the hashed version from the DB
+app.get("/kittens/:id", async (req,res, next) => {
+  try{
+    const id = req.params.id
+    const userData = req.user
+    if(!userData)
+    {
+      res.sendStatus(401)
+    }else if(id != userData.id)
+    {
+      res.sendStatus(401)
+    }
+    else{
+      const {age, color, name} = await Kitten.findOne({ where: { ownerId: userData.id } })
+      const clean = { age: age, color: color, name: name }
+      res.send(clean)
+    }
+  } catch(error)
+  {
+    console.log(error)
+    next(error)
+  }
+})
 
-// GET /kittens/:id
-// TODO - takes an id and returns the cat with that id
+
+
 
 // POST /kittens
 // TODO - takes req.body of {name, age, color} and creates a new cat with the given name, age, and color
